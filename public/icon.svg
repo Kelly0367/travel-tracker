@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0A1628"/>
+      <stop offset="100%" stop-color="#16294A"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00E5A0"/>
+      <stop offset="100%" stop-color="#00B87E"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- 定位针 -->
+  <path d="M256 96c-61.8 0-112 50.2-112 112 0 78.4 112 208 112 208s112-129.6 112-208c0-61.8-50.2-112-112-112z" fill="url(#pin)"/>
+  <circle cx="256" cy="208" r="40" fill="#0A1628"/>
+  <!-- 飞机 -->
+  <path d="M380 300l-28-28 72-72-16-16-72 72-28-28-20 8 44 44-56 16-16-16-32 16 16 16 16-16 56 16z" fill="#FF8A3D" opacity="0.9"/>
+</svg>

@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+@import 'leaflet/dist/leaflet.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: #0A1628;
+  color: #E8EEF7;
+}
+
+/* Leaflet 暗色适配 */
+.leaflet-container {
+  background: #0F1F38;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.leaflet-tile {
+  filter: brightness(0.7) invert(1) contrast(0.9) hue-rotate(180deg) saturate(0.6) brightness(0.9);
+}
+
+/* 自定义定位标记脉冲 */
+.location-pulse {
+  position: relative;
+  width: 18px;
+  height: 18px;
+}
+
+.location-pulse::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: #00E5A0;
+  box-shadow: 0 0 0 0 rgba(0, 229, 160, 0.7);
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+.location-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 9999px;
+  background: #00E5A0;
+  border: 2px solid #0A1628;
+}
+
+/* 家人端的定位标记（暖橙） */
+.location-pulse.watch::before {
+  background: #FF8A3D;
+  box-shadow: 0 0 0 0 rgba(255, 138, 61, 0.7);
+}
+
+.location-pulse.watch::after {
+  background: #FF8A3D;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #0F1F38;
+  color: #E8EEF7;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.leaflet-popup-tip {
+  background: #0F1F38;
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px;
+  font-size: 13px;
+}
+
+/* 滚动条美化 */
+.scroll-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+
+/* 毛玻璃卡片 */
+.glass {
+  background: rgba(15, 31, 56, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}

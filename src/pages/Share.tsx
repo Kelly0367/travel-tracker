@@ -8,11 +8,13 @@ import {
   Share2,
   User,
   AlertTriangle,
+  Clock,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useTrackerStore } from '@/store/useTrackerStore'
 import MapView from '@/components/MapView'
 import StatusPanel from '@/components/StatusPanel'
+import type { TrackPoint } from '@/lib/types'
 
 type Phase = 'setup' | 'sharing'
 
@@ -28,10 +30,35 @@ export default function Share() {
   const [error, setError] = useState('')
   const [geoError, setGeoError] = useState('')
   const [address, setAddress] = useState('')
+  const [intervalSeconds, setIntervalSeconds] = useState(300) // 上报间隔（秒），默认5分钟
+  const [isCustomInterval, setIsCustomInterval] = useState(false)
+  const [customSeconds, setCustomSeconds] = useState('60')
 
   const watchIdRef = useRef<number | null>(null)
-  const lastReportRef = useRef(0)
   const lastGeocodeKeyRef = useRef('')
+  const batteryRef = useRef<number | null>(null)
+  const latestPointRef = useRef<TrackPoint | null>(null)
+  const reportTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const intervalSecondsRef = useRef(intervalSeconds)
+  const codeRef = useRef<string>('')
+
+  // 预设间隔选项（秒）
+  const PRESET_INTERVALS = [
+    { value: 30, label: '30 秒' },
+    { value: 60, label: '1 分钟' },
+    { value: 120, label: '2 分钟' },
+    { value: 180, label: '3 分钟' },
+    { value: 300, label: '5 分钟' },
+    { value: 480, label: '8 分钟' },
+    { value: 600, label: '10 分钟' },
+  ]
+
+  // 将秒数格式化为易读文字
+  const formatInterval = (sec: number): string => {
+    if (sec < 60) return `${sec} 秒`
+    if (sec % 60 === 0) return `${sec / 60} 分钟`
+    return `${Math.floor(sec / 60)} 分 ${sec % 60} 秒`
+  }
 
   // 开始共享
   const handleStart = async () => {
@@ -43,30 +70,73 @@ export default function Share() {
     try {
       const result = await api.createSession(name)
       setSession(result.code, result.nickname)
-      setShareUrl(result.shareUrl)
+      codeRef.current = result.code
+      intervalSecondsRef.current = intervalSeconds
+      // 分享链接以浏览器当前地址为准：这是访问者真实可达的域名。
+      // 后端返回的 shareUrl 在反向代理后面可能带内部主机名，不能直接给家人用。
+      setShareUrl(`${window.location.origin}/watch/${result.code}`)
       setPhase('sharing')
       setOnline(true)
-      startWatching(result.code)
+      startWatching()
+      startReporting()
     } catch (e) {
       setError(e instanceof Error ? e.message : '创建会话失败')
     }
   }
 
+  // 定时上报最新位置
+  const startReporting = () => {
+    // 先立即上报一次
+    reportLatest()
+    const intervalMs = intervalSecondsRef.current * 1000
+    reportTimerRef.current = setInterval(reportLatest, intervalMs)
+  }
+
+  const reportLatest = async () => {
+    const point = latestPointRef.current
+    if (!point || !codeRef.current) return
+    try {
+      await api.reportLocation(
+        codeRef.current,
+        point.latitude,
+        point.longitude,
+        point.accuracy,
+        point.timestamp,
+        point.battery,
+      )
+    } catch {
+      // 上报失败不阻塞，下次重试
+    }
+  }
+
   // 启动位置监听
-  const startWatching = (sessionCode: string) => {
+  const startWatching = () => {
     if (!navigator.geolocation) {
       setGeoError('当前浏览器不支持定位功能')
       return
     }
 
+    // 采集电池电量
+    const nav = navigator as Navigator & { getBattery?: () => Promise<{ level: number; addEventListener: (e: string, cb: () => void) => void }> }
+    if (nav.getBattery) {
+      nav.getBattery().then((bat) => {
+        batteryRef.current = bat.level
+        bat.addEventListener('levelchange', () => {
+          batteryRef.current = bat.level
+        })
+      }).catch(() => {})
+    }
+
     watchIdRef.current = navigator.geolocation.watchPosition(
-      async (pos) => {
-        const point = {
+      (pos) => {
+        const point: TrackPoint = {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
           accuracy: pos.coords.accuracy,
           timestamp: Date.now(),
+          battery: batteryRef.current,
         }
+        latestPointRef.current = point
         addPoint(point)
 
         // 解析地址（去重，4位小数精度）
@@ -77,23 +147,6 @@ export default function Share() {
             .reverseGeocode(point.latitude, point.longitude)
             .then((data) => setAddress(data.address))
             .catch(() => {})
-        }
-
-        // 节流：至少间隔 3 秒上报一次
-        const now = Date.now()
-        if (now - lastReportRef.current >= 3000) {
-          lastReportRef.current = now
-          try {
-            await api.reportLocation(
-              sessionCode,
-              point.latitude,
-              point.longitude,
-              point.accuracy,
-              point.timestamp,
-            )
-          } catch {
-            // 上报失败不阻塞，下次重试
-          }
         }
       },
       (err) => {
@@ -117,6 +170,10 @@ export default function Share() {
     if (watchIdRef.current != null) {
       navigator.geolocation.clearWatch(watchIdRef.current)
       watchIdRef.current = null
+    }
+    if (reportTimerRef.current) {
+      clearInterval(reportTimerRef.current)
+      reportTimerRef.current = null
     }
     if (code) {
       try {
@@ -151,6 +208,9 @@ export default function Share() {
     return () => {
       if (watchIdRef.current != null) {
         navigator.geolocation.clearWatch(watchIdRef.current)
+      }
+      if (reportTimerRef.current) {
+        clearInterval(reportTimerRef.current)
       }
     }
   }, [])
@@ -203,6 +263,57 @@ export default function Share() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <label className="flex items-center gap-1.5 text-sm text-white/70">
+                  <Clock size={16} /> 位置上报间隔
+                </label>
+                <select
+                  value={isCustomInterval ? 'custom' : String(intervalSeconds)}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === 'custom') {
+                      setIsCustomInterval(true)
+                      setCustomSeconds(String(intervalSeconds))
+                    } else {
+                      setIsCustomInterval(false)
+                      setIntervalSeconds(Number(v))
+                    }
+                  }}
+                  className="w-full bg-navy-900/60 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-teal/50 transition-colors"
+                >
+                  {PRESET_INTERVALS.map((opt) => (
+                    <option key={opt.value} value={opt.value} className="bg-navy-900">
+                      {opt.label}
+                    </option>
+                  ))}
+                  <option value="custom" className="bg-navy-900">
+                    自定义
+                  </option>
+                </select>
+                {isCustomInterval && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={10}
+                      value={customSeconds}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setCustomSeconds(v)
+                        const n = parseInt(v, 10)
+                        if (!isNaN(n) && n >= 10) {
+                          setIntervalSeconds(n)
+                        }
+                      }}
+                      className="flex-1 bg-navy-900/60 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-teal/50 transition-colors"
+                    />
+                    <span className="text-sm text-white/50">秒</span>
+                  </div>
+                )}
+                <p className="text-xs text-white/40">
+                  当前：每 {formatInterval(intervalSeconds)} 上报一次位置
+                </p>
+              </div>
+
               {error && (
                 <div className="flex items-center gap-2 text-sm text-red-400">
                   <AlertTriangle size={16} />
@@ -232,12 +343,12 @@ export default function Share() {
   return (
     <div className="h-screen flex flex-col relative">
       {/* 地图 */}
-      <div className="absolute inset-0">
+      <div className="absolute inset-0 z-0">
         <MapView current={current} track={track} variant="share" address={address} />
       </div>
 
       {/* 顶部栏 */}
-      <div className="relative z-10 p-4">
+      <div className="relative z-50 p-4">
         <div className="glass rounded-2xl px-4 py-3 flex items-center justify-between">
           <button
             onClick={() => navigate('/')}
@@ -256,7 +367,7 @@ export default function Share() {
       </div>
 
       {/* 分享码卡片 */}
-      <div className="relative z-10 px-4 -mt-2">
+      <div className="relative z-50 px-4 -mt-2">
         <div className="glass rounded-2xl p-4 animate-slide-up">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs text-white/50">分享码</span>
@@ -279,11 +390,15 @@ export default function Share() {
             </div>
             <Share2 size={20} className="text-sunset flex-shrink-0" />
           </div>
+          <div className="mt-3 flex items-center gap-1.5 text-xs text-white/40">
+            <Clock size={12} />
+            每 {formatInterval(intervalSeconds)} 上报一次位置
+          </div>
         </div>
       </div>
 
       {/* 状态面板 + 底部控制 */}
-      <div className="relative z-10 mt-auto p-4 space-y-3">
+      <div className="relative z-50 mt-auto p-4 space-y-3">
         {geoError && (
           <div className="glass rounded-xl px-4 py-3 flex items-start gap-2 text-sm text-amber-300 animate-fade-in">
             <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />

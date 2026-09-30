@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
-@import 'leaflet/dist/leaflet.css';
 
 @tailwind base;
 @tailwind components;
@@ -33,14 +32,19 @@ body {
   color: #E8EEF7;
 }
 
-/* Leaflet 暗色适配 */
-.leaflet-container {
+/* 地图容器底色（高德海外底图自带配色，不做反色处理） */
+.amap-container {
   background: #0F1F38;
   font-family: 'Inter', system-ui, sans-serif;
 }
 
-.leaflet-tile {
-  filter: brightness(0.7) invert(1) contrast(0.9) hue-rotate(180deg) saturate(0.6) brightness(0.9);
+/* 高德信息窗深色适配 */
+.amap-info-content {
+  background: #0F1F38;
+  color: #E8EEF7;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font: 13px/1.6 'Inter', system-ui, sans-serif;
 }
 
 /* 自定义定位标记脉冲 */
@@ -79,22 +83,6 @@ body {
   background: #FF8A3D;
 }
 
-.leaflet-popup-content-wrapper {
-  background: #0F1F38;
-  color: #E8EEF7;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.leaflet-popup-tip {
-  background: #0F1F38;
-}
-
-.leaflet-popup-content {
-  margin: 12px 14px;
-  font-size: 13px;
-}
-
 /* 滚动条美化 */
 .scroll-thin::-webkit-scrollbar {
   width: 4px;
@@ -113,4 +101,25 @@ body {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 高德地图 z-index 重置：防止地图瓦片/控件覆盖页面 UI 按钮 */
+.amap-container {
+  z-index: 0 !important;
+}
+.amap-maps {
+  z-index: 0 !important;
+}
+.amap-marker,
+.amap-overlay,
+.amap-labels {
+  z-index: 1 !important;
+}
+.amap-info,
+.amap-info-contentContainer {
+  z-index: 2 !important;
+}
+.amap-toolbar,
+.amap-control {
+  z-index: 1 !important;
 }

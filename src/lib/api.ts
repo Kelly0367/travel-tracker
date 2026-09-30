@@ -55,11 +55,12 @@ export const api = {
     longitude: number,
     accuracy: number,
     timestamp: number,
+    battery?: number | null,
   ): Promise<void> {
     return fetch('/api/locations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, latitude, longitude, accuracy, timestamp }),
+      body: JSON.stringify({ code, latitude, longitude, accuracy, timestamp, battery }),
     }).then((res) => res.json())
   },
 

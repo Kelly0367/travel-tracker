@@ -31,3 +31,6 @@ dev-dist
 # App data (location tracking)
 tracker-data.json
 tracker.db
+
+# Local backups
+.backup-*/

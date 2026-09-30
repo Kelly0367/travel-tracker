@@ -5,8 +5,17 @@ services:
     plan: free
     buildCommand: npm install && npm run build
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "10000"
+      # Turso 云数据库连接信息（在 Render 控制台或应用 Blueprint 时手动填写）
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      # 分享链接使用的公网地址。
+      # 不设置时代码会自动使用请求的 x-forwarded-host（Render 默认正确），
+      # 如绑定自定义域名，可在此显式指定：
+      # - key: PUBLIC_ORIGIN
+      #   value: https://your-custom-domain.com

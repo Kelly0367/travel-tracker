@@ -11,9 +11,11 @@
     "check": "tsc --noEmit",
     "server:dev": "nodemon",
     "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\"",
-    "start": "tsx api/server.ts"
+    "start": "tsx api/server.ts",
+    "start:prod": "npm run build && tsx api/server.ts"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "clsx": "^2.1.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",

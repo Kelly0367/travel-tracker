@@ -1,7 +1,7 @@
 import { createServer } from 'http'
 import { Server as SocketIOServer } from 'socket.io'
 import app from './app.js'
-import { getSession, type SessionRow } from './db.js'
+import { initDb, getSession } from './db.js'
 
 const PORT = process.env.PORT || 3001
 
@@ -34,7 +34,7 @@ io.on('connection', (socket) => {
   // 旅行者端通过 socket 直接上报位置（备选通道）
   socket.on(
     'location:update',
-    (data: {
+    async (data: {
       code: string
       latitude: number
       longitude: number
@@ -44,7 +44,8 @@ io.on('connection', (socket) => {
       const upperCode = data.code?.toUpperCase()
       if (!upperCode || typeof data.latitude !== 'number' || typeof data.longitude !== 'number') return
 
-      const session = getSession.get(upperCode) as SessionRow | undefined
+      // getSession 已改为异步（SQLite），这里需要 await
+      const session = await getSession(upperCode)
       if (!session) return
 
       const ts = data.timestamp || Date.now()
@@ -63,7 +64,10 @@ io.on('connection', (socket) => {
   })
 })
 
-httpServer.listen(PORT, () => {
+// 必须先初始化数据库（建表），再开始监听，否则所有 DB 操作都会失败
+await initDb()
+
+httpServer.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`Server ready on port ${PORT}`)
 })
 

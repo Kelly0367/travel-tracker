@@ -10,11 +10,24 @@ import {
   AlertTriangle,
   Loader2,
   CalendarDays,
+  Battery,
+  Footprints,
+  MapPinned,
+  Timer,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { getSocket } from '@/lib/socket'
 import type { TrackPoint } from '@/lib/types'
-import { formatCoord, formatTime, timeAgo } from '@/lib/format'
+import {
+  formatCoord,
+  formatTime,
+  timeAgo,
+  coordDMS,
+  formatDistance,
+  formatDuration,
+  formatBattery,
+} from '@/lib/format'
+import { detectSegments, computeStats } from '@/lib/trackAnalysis'
 import MapView from '@/components/MapView'
 
 function todayStr(): string {
@@ -56,6 +69,9 @@ export default function Watch() {
     () => (track.length > 0 ? track[track.length - 1] : null),
     [track],
   )
+
+  const segments = useMemo(() => detectSegments(track), [track])
+  const stats = useMemo(() => computeStats(track), [track])
 
   const isToday = selectedDate === todayStr()
 
@@ -243,12 +259,12 @@ export default function Watch() {
   return (
     <div className="h-screen flex flex-col relative">
       {/* 地图 */}
-      <div className="absolute inset-0">
+      <div className="absolute inset-0 z-0">
         <MapView current={current} track={track} variant="watch" address={address} />
       </div>
 
       {/* 顶部栏 */}
-      <div className="relative z-10 p-4">
+      <div className="relative z-50 p-4">
         <div className="glass rounded-2xl px-4 py-3 flex items-center justify-between">
           <button
             onClick={() => navigate('/')}
@@ -283,7 +299,7 @@ export default function Watch() {
 
       {/* 加载中 */}
       {loading && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-navy-900/60 backdrop-blur-sm">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-navy-900/60 backdrop-blur-sm">
           <div className="flex items-center gap-3 text-white/70">
             <Loader2 size={24} className="animate-spin text-sunset" />
             正在获取位置信息...
@@ -293,7 +309,7 @@ export default function Watch() {
 
       {/* 错误提示 */}
       {error && !loading && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-navy-900/70 backdrop-blur-sm px-6">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-navy-900/70 backdrop-blur-sm px-6">
           <div className="glass rounded-2xl p-6 max-w-sm text-center space-y-3">
             <div className="w-12 h-12 rounded-full bg-red-500/15 flex items-center justify-center mx-auto">
               <AlertTriangle size={24} className="text-red-400" />
@@ -317,7 +333,7 @@ export default function Watch() {
 
       {/* 底部信息面板 */}
       {!loading && !error && (
-        <div className="relative z-10 mt-auto p-4 space-y-3">
+        <div className="relative z-50 mt-auto p-4 space-y-3">
           {/* 日期选择器 */}
           <div className="glass rounded-2xl p-3 animate-slide-up">
             <div className="flex items-center gap-2 mb-2">
@@ -385,25 +401,38 @@ export default function Watch() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-1 text-xs text-white/50">
-                      <MapPin size={12} /> 坐标
-                    </div>
-                    <div className="font-mono text-sm">
-                      {formatCoord(current.latitude)}
-                    </div>
-                    <div className="font-mono text-sm">
-                      {formatCoord(current.longitude)}
-                    </div>
+                {/* 坐标（十进制 + DMS） */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1 text-xs text-white/50">
+                    <MapPin size={12} /> 坐标
                   </div>
+                  <div className="font-mono text-sm">
+                    {formatCoord(current.latitude, 5)}°N, {formatCoord(current.longitude, 5)}°E
+                  </div>
+                  <div className="font-mono text-xs text-white/50">
+                    {coordDMS(current.latitude, current.longitude)}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-1 text-xs text-white/50">
                       <Clock size={12} /> 时间
                     </div>
                     <div className="text-sm">{formatTime(current.timestamp)}</div>
                     <div className="text-xs text-white/50">
-                      {current.accuracy != null ? `精度 ${Math.round(current.accuracy)}m` : '—'}
+                      {current.accuracy != null ? `精度 ±${Math.round(current.accuracy)} 米` : '—'}
+                    </div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1 text-xs text-white/50">
+                      <Battery size={12} /> 设备电量
+                    </div>
+                    <div className={`text-sm ${current.battery != null && current.battery < 0.2 ? 'text-red-400' : ''}`}>
+                      {formatBattery(current.battery)}
+                    </div>
+                    <div className="text-xs text-white/50">
+                      {current.battery != null && current.battery < 0.2 ? '电量偏低' : '正常'}
                     </div>
                   </div>
                 </div>
@@ -411,6 +440,30 @@ export default function Watch() {
             ) : (
               <div className="text-sm text-white/40 py-2 text-center">
                 旅行者尚未上报位置，请稍候...
+              </div>
+            )}
+
+            {/* 当日统计 */}
+            {track.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="bg-white/5 rounded-xl p-2.5 text-center">
+                  <div className="flex items-center justify-center gap-1 text-xs text-white/50 mb-1">
+                    <Footprints size={12} /> 移动距离
+                  </div>
+                  <div className="text-sm font-semibold">{formatDistance(stats.totalDistance)}</div>
+                </div>
+                <div className="bg-white/5 rounded-xl p-2.5 text-center">
+                  <div className="flex items-center justify-center gap-1 text-xs text-white/50 mb-1">
+                    <MapPinned size={12} /> 停留点
+                  </div>
+                  <div className="text-sm font-semibold">{stats.stayCount}</div>
+                </div>
+                <div className="bg-white/5 rounded-xl p-2.5 text-center">
+                  <div className="flex items-center justify-center gap-1 text-xs text-white/50 mb-1">
+                    <Timer size={12} /> 主要时间
+                  </div>
+                  <div className="text-sm font-semibold">{formatDuration(stats.totalDurationMs)}</div>
+                </div>
               </div>
             )}
 
@@ -422,37 +475,73 @@ export default function Watch() {
             </button>
           </div>
 
-          {/* 轨迹时间轴 */}
+          {/* 轨迹时间轴（按停留/移动分段） */}
           {showTimeline && track.length > 0 && (
-            <div className="glass rounded-2xl p-4 max-h-60 overflow-y-auto scroll-thin animate-slide-up">
-              <div className="text-xs text-white/50 mb-3">{formatDateLabel(selectedDate)}轨迹时间轴</div>
-              <div className="space-y-2.5">
-                {[...track].reverse().map((p, i) => {
-                  const idx = track.length - 1 - i
+            <div className="glass rounded-2xl p-4 max-h-72 overflow-y-auto scroll-thin animate-slide-up">
+              <div className="text-xs text-white/50 mb-3">{formatDateLabel(selectedDate)}轨迹时间轴 · 点按可在地图定位</div>
+              <div className="space-y-3">
+                {[...segments].reverse().map((seg, i) => {
+                  const isCurrent = i === 0 && isToday && seg.type === 'stay'
                   return (
-                    <div key={idx} className="flex items-center gap-3">
-                      <div className="flex-shrink-0 w-5 flex flex-col items-center">
+                    <div key={i} className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-5 flex flex-col items-center pt-1">
                         <div
                           className={`w-2.5 h-2.5 rounded-full ${
-                            idx === track.length - 1 ? 'bg-sunset' : 'bg-white/30'
+                            seg.type === 'stay' ? 'bg-teal' : 'bg-sunset/70'
                           }`}
                         />
-                        {i < track.length - 1 && <div className="w-px h-5 bg-white/10 mt-1" />}
+                        {i < segments.length - 1 && <div className="w-px h-8 bg-white/10 mt-1" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm">
-                          {formatTime(p.timestamp)}
-                          {idx === track.length - 1 && isToday && (
-                            <span className="ml-2 text-xs text-sunset">当前</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium">
+                            {formatTime(seg.start.timestamp)}
+                          </span>
+                          {seg.type === 'stay' ? (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-teal/15 text-teal">
+                              停留 {formatDuration(seg.durationMs)}
+                            </span>
+                          ) : (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-sunset/15 text-sunset">
+                              移动 {formatDistance(seg.distanceMeters)}
+                            </span>
+                          )}
+                          {isCurrent && (
+                            <span className="text-xs text-sunset">当前</span>
                           )}
                         </div>
-                        <div className="font-mono text-xs text-white/40">
-                          {formatCoord(p.latitude, 4)}, {formatCoord(p.longitude, 4)}
+                        <div className="text-xs text-white/50 mt-0.5">
+                          {formatTime(seg.start.timestamp)} – {formatTime(seg.end.timestamp)}
+                        </div>
+                        <div className="font-mono text-xs text-white/40 mt-0.5">
+                          {formatCoord(seg.end.latitude, 4)}, {formatCoord(seg.end.longitude, 4)}
                         </div>
                       </div>
                     </div>
                   )
                 })}
+              </div>
+
+              {/* 全部行程统计 */}
+              <div className="mt-4 pt-3 border-t border-white/10 grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-white/50">点位总数</div>
+                  <div className="text-sm font-semibold">{stats.totalPoints}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-white/50">累计移动</div>
+                  <div className="text-sm font-semibold">{formatDistance(stats.totalDistance)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-white/50">停留点</div>
+                  <div className="text-sm font-semibold">{stats.stayCount}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-white/50">最近定位</div>
+                  <div className="text-sm font-semibold">
+                    {stats.lastTimestamp ? formatTime(stats.lastTimestamp) : '—'}
+                  </div>
+                </div>
               </div>
             </div>
           )}

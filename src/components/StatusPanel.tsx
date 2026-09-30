@@ -1,6 +1,6 @@
-import { Wifi, WifiOff, Navigation, Clock, Activity, MapPin } from 'lucide-react'
+import { Wifi, WifiOff, Navigation, Clock, Activity, MapPin, Battery } from 'lucide-react'
 import type { TrackPoint } from '@/lib/types'
-import { formatCoord, formatTime, timeAgo } from '@/lib/format'
+import { formatCoord, formatTime, timeAgo, formatBattery } from '@/lib/format'
 
 interface StatusPanelProps {
   isOnline: boolean
@@ -74,6 +74,13 @@ export default function StatusPanel({
               </div>
             </div>
           </div>
+
+          {current.battery != null && (
+            <div className="flex items-center gap-1.5 text-xs text-white/60">
+              <Battery size={12} className={current.battery < 0.2 ? 'text-red-400' : 'text-teal'} />
+              设备电量 {formatBattery(current.battery)}
+            </div>
+          )}
         </div>
       ) : (
         <div className="text-sm text-white/40 py-2 text-center">等待获取位置...</div>

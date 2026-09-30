@@ -3,6 +3,7 @@ export interface TrackPoint {
   longitude: number
   accuracy: number | null
   timestamp: number
+  battery: number | null
 }
 
 export interface SessionInfo {

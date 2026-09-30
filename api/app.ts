@@ -26,19 +26,19 @@ app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
 /**
- * API Routes
+ * health（必须在 API 路由与静态托管之前注册，保证探活一定命中）
  */
-app.use('/api', trackerRoutes)
-
-/**
- * health
- */
-app.use('/api/health', (_req: Request, res: Response): void => {
+app.get('/api/health', (_req: Request, res: Response): void => {
   res.status(200).json({
     success: true,
     message: 'ok',
   })
 })
+
+/**
+ * API Routes
+ */
+app.use('/api', trackerRoutes)
 
 /**
  * 生产环境：托管前端 dist 静态文件

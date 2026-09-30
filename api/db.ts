@@ -1,7 +1,16 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { createClient, type Client } from '@libsql/client'
+
+// 动态加载 @libsql/client，避免在未使用 Turso 的环境下因原生依赖报错
+let createClient: ((opts: { url: string; authToken?: string }) => any) | null = null
+try {
+  // @ts-ignore - 可选依赖，仅在配置了 Turso 时需要
+  const mod = await import('@libsql/client')
+  createClient = mod.createClient
+} catch {
+  // @libsql/client 不可用时自动降级为本地 JSON 文件存储
+}
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -41,12 +50,18 @@ export type { SessionRow, LocationRow }
 const tursoUrl = process.env.TURSO_DATABASE_URL
 const tursoToken = process.env.TURSO_AUTH_TOKEN
 
-let sql: Client | null = null
+let sql: any = null
 let useSql = false
 
 export async function initDb(): Promise<void> {
   if (!tursoUrl) {
     // 本地开发：JSON 文件兜底
+    loadFileData()
+    return
+  }
+
+  if (!createClient) {
+    console.warn('[db] TURSO_DATABASE_URL is set but @libsql/client is not available, falling back to JSON file')
     loadFileData()
     return
   }
@@ -107,7 +122,11 @@ interface DataFile {
   nextLocationId: number
 }
 
-const dbPath = path.join(__dirname, '..', 'tracker-data.json')
+// Vercel serverless 只允许写 /tmp，本地开发用项目目录
+const isVercel = !!process.env.VERCEL
+const dbPath = isVercel
+  ? '/tmp/tracker-data.json'
+  : path.join(__dirname, '..', 'tracker-data.json')
 
 let fileData: DataFile = { sessions: [], locations: [], nextLocationId: 1 }
 
